@@ -1,0 +1,1 @@
+# Evaluate the trained models using the SentEval framework

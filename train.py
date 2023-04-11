@@ -1,0 +1,1 @@
+# Train the models on the SNLI dataset and use PyTorch Lightning to log the results
