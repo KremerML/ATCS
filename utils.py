@@ -1,1 +1,0 @@
-# Util functions for the project
