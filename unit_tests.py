@@ -18,6 +18,7 @@ class TestSNLIDataset(unittest.TestCase):
         ]
         dataset = SNLIDataset(data)
         self.assertEqual(len(dataset), 3)
+        print("test_SNLI_dataset_length passed.")
 
     def test_SNLI_dataset_getitem(self):
         data = [
@@ -29,6 +30,7 @@ class TestSNLIDataset(unittest.TestCase):
         self.assertEqual(dataset[0], (['this', 'is', 'a', 'premise'], ['this', 'is', 'a', 'hypothesis'], 'entailment'))
         self.assertEqual(dataset[1], (['another', 'premise'], ['another', 'hypothesis'], 'contradiction'))
         self.assertEqual(dataset[2], (['the', 'third', 'premise'], ['the', 'third', 'hypothesis'], 'neutral'))
+        print("test_SNLI_dataset_getitem passed.")
 
     def test_load_snli_dataset(self):
         with patch('builtins.open', new_callable=MagicMock) as mock_open:
@@ -45,11 +47,13 @@ class TestSNLIDataset(unittest.TestCase):
             self.assertEqual(len(dataset), 2)
             self.assertEqual(len(word2idx), 8)
             self.assertEqual(len(label2idx), 2)
+        print("test_load_snli_dataset passed.")
 
     def test_preprocess_sentence(self):
         sentence = 'This is a test sentence.'
         tokens = preprocess_sentence(sentence)
         self.assertEqual(tokens, ['this', 'is', 'a', 'test', 'sentence', '.'])
+        print("test_preprocess_sentence passed.")
 
     def test_build_vocab(self):
         data = [
@@ -63,12 +67,14 @@ class TestSNLIDataset(unittest.TestCase):
         self.assertEqual(word2idx['this'], 0)
         self.assertEqual(word2idx['a'], 2)
         self.assertEqual(idx2word[4], 'hypothesis')
+        print("test_build_vocab passed.")
 
     def test_sentence_to_indices(self):
         sentence = ['this', 'is', 'a', 'test', 'sentence', '.']
         word2idx = {'this': 0, 'is': 1, 'a': 2, 'test': 3, 'sentence': 4, '.': 5}
         indices = sentence_to_indices(sentence, word2idx)
         self.assertEqual(indices, [0, 1, 2, 3, 4, 5])
+        print("test_sentence_to_indices passed.")
 
     def test_collate_fn(self):
         data = [
@@ -81,6 +87,7 @@ class TestSNLIDataset(unittest.TestCase):
         self.assertEqual(torch.Tensor(premise), torch.Tensor([[0, 1, 2, 3], [5, 3], [6, 7, 3]]))
         self.assertEqual(torch.Tensor(hypothesis), torch.Tensor([[0, 1, 2, 4], [5, 4], [6, 7, 4]]))
         self.assertEqual(torch.Tensor(label), torch.Tensor([9, 10, 8]))
+        print("test_collate_fn passed.")
 
     def test_get_train_loader(self):
         data = [
@@ -93,7 +100,6 @@ class TestSNLIDataset(unittest.TestCase):
         train_loader = get_train_loader(dataset, batch_size=2)
 
         self.assertEqual(len(train_loader), 2)
-
         batches = []
         for batch in train_loader:
             batches.append(batch)
@@ -103,5 +109,7 @@ class TestSNLIDataset(unittest.TestCase):
             self.assertEqual(len(batch[2]), 2)
 
         self.assertEqual(len(batches), 2)
+        print("test_get_train_loader passed.")
 
-
+if __name__ == '__main__':
+    unittest.main()
