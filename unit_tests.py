@@ -61,7 +61,7 @@ class TestSNLIDataset(unittest.TestCase):
             {'premise': ['another', 'premise'], 'hypothesis': ['another', 'hypothesis'], 'label': 'contradiction'},
             {'premise': ['the', 'third', 'premise'], 'hypothesis': ['the', 'third', 'hypothesis'], 'label': 'neutral'}
             ]
-        word2idx, idx2word = build_vocab(data)
+        _, word2idx, idx2word = load_snli_dataset()
         self.assertEqual(len(word2idx), 8)
         self.assertEqual(len(idx2word), 8)
         self.assertEqual(word2idx['this'], 0)

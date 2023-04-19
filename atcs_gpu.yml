@@ -1,0 +1,22 @@
+name: atcs_gpu
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10.6
+  - pip=23.0.1
+  - pytorch
+  - pytorch-cuda=11.7
+  - pip:
+    - ipykernel
+    - ipywidgets
+    - datasets
+    - nltk
+    - numpy
+    - tqdm
+    - tensorboard
+    - torch-tb-profiler
+    - scikit-learn
+    - scipy
