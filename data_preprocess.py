@@ -20,20 +20,31 @@ class NLIDataset(Dataset):
         s1 = self.data['s1'][idx]
         s2 = self.data['s2'][idx]
         label = self.data['label'][idx]
-        s1_embed, s1_length = self._get_sentence_embedding(s1)
-        s2_embed, s2_length = self._get_sentence_embedding(s2)
-        return s1_embed, s1_length, s2_embed, s2_length, label
+        s1_idx, s1_length = self._get_sentence_indices(s1)
+        s2_idx, s2_length = self._get_sentence_indices(s2)
+        return s1_idx, s1_length, s2_idx, s2_length, label
 
-    def _get_sentence_embedding(self, sentence):
+
+    def _get_sentence_indices(self, sentence):
         tokens = sentence.split()
         length = len(tokens)
-        embed = np.zeros((length, self.emb_dim))
+        indices = torch.zeros(length, self.emb_dim)
 
         for i, word in enumerate(tokens):
             if word in self.word_vec:
-                embed[i, :] = self.word_vec[word]
+                indices[i] = torch.FloatTensor(self.word_vec[word])
+        return indices, length
+    # def _get_sentence_indices(self, sentence):
+    #     tokens = sentence.split()
+    #     length = len(tokens)
+    #     indices = np.zeros(length, dtype=np.int64)
 
-        return torch.from_numpy(embed).float(), length
+    #     for i, word in enumerate(tokens):
+    #         if word in self.word_vec:
+    #             indices[i] = list(self.word_vec.keys()).index(word)
+    #     indices = torch.from_numpy(indices).unsqueeze(1)
+    #     return indices, length
+
 
 
 def get_word_dict(sentences):
@@ -56,8 +67,8 @@ def get_glove(word_dict, glove_path):
         for line in f:
             word, vec = line.split(' ', 1)
             if word in word_dict:
-                word_vec[word] = np.array(list(map(float, vec.split())))
-    print('Found {0}(/{1}) words with glove vectors'.format(
+                word_vec[word] = list(map(float, vec.split()))
+    print('Found {0}/{1} words with glove vectors'.format(
                 len(word_vec), len(word_dict)))
     return word_vec
 
@@ -91,62 +102,24 @@ def get_nli(data_path):
     return train_data, valid_data, test_data
 
 
-# def get_nli(data_path):
-#     s1 = {}
-#     s2 = {}
-#     target = {}
-
-#     dico_label = {'entailment': 0,  'neutral': 1, 'contradiction': 2}
-
-#     for data_type in ['train', 'dev', 'test']:
-#         s1[data_type], s2[data_type], target[data_type] = {}, {}, {}
-#         s1[data_type]['path'] = os.path.join(data_path, 'snli_1.0_' + data_type + '.txt')
-#         s2[data_type]['path'] = os.path.join(data_path, 'snli_1.0_' + data_type + '.txt')
-#         target[data_type]['path'] = os.path.join(data_path,
-#                                                  'labels.' + data_type)
-
-#         s1[data_type]['sent'] = [line.rstrip() for line in
-#                                  open(s1[data_type]['path'], 'r')]
-#         s2[data_type]['sent'] = [line.rstrip() for line in
-#                                  open(s2[data_type]['path'], 'r')]
-#         target[data_type]['data'] = np.array([dico_label[line.rstrip('\n')]
-#                 for line in open(target[data_type]['path'], 'r')])
-
-#         assert len(s1[data_type]['sent']) == len(s2[data_type]['sent']) == \
-#             len(target[data_type]['data'])
-
-#         print('** {0} DATA : Found {1} pairs of {2} sentences.'.format(
-#                 data_type.upper(), len(s1[data_type]['sent']), data_type))
-
-#     train = {'s1': s1['train']['sent'], 's2': s2['train']['sent'],
-#              'label': target['train']['data']}
-#     dev = {'s1': s1['dev']['sent'], 's2': s2['dev']['sent'],
-#            'label': target['dev']['data']}
-#     test = {'s1': s1['test']['sent'], 's2': s2['test']['sent'],
-#             'label': target['test']['data']}
-#     return train, dev, test
-
-# def get_nli_dataloader(data, word_vec, batch_size=32, shuffle=True, num_workers=0):
-#     dataset = NLIDataset(data, word_vec)
-#     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
-#                             collate_fn=collate_fn)
-#     return dataloader
-
 def collate_fn(batch):
     s1, s1_lengths, s2, s2_lengths, labels = zip(*batch)
-    s1_lengths, s1_perm_idx = torch.tensor(s1_lengths).sort(descending=True)
-    s2_lengths, s2_perm_idx = torch.tensor(s2_lengths).sort(descending=True)
-
-    s1 = torch.nn.utils.rnn.pad_sequence([s1[i] for i in s1_perm_idx], batch_first=True)
-    s2 = torch.nn.utils.rnn.pad_sequence([s2[i] for i in s2_perm_idx], batch_first=True)
+    
+    s1 = torch.nn.utils.rnn.pad_sequence(s1, batch_first=True, padding_value=0)
+    s2 = torch.nn.utils.rnn.pad_sequence(s2, batch_first=True, padding_value=0)
+    s1_lengths = torch.tensor(s1_lengths)
+    s2_lengths = torch.tensor(s2_lengths)
     labels = torch.tensor(labels, dtype=torch.long)
 
     return s1, s1_lengths, s2, s2_lengths, labels
 
+# def collate_fn(batch):
+#     s1, s1_lengths, s2, s2_lengths, labels = zip(*batch)
+#     s1_lengths, s1_perm_idx = torch.tensor(s1_lengths).sort(descending=True)
+#     s2_lengths, s2_perm_idx = torch.tensor(s2_lengths).sort(descending=True)
 
-# Usage:
-# train_data, dev_data, test_data = get_nli(data_path)
-# word_vec = build_vocab(train_data['s1'] + train_data['s2'], glove_path)
-# train_loader = get_nli_dataloader(train_data, word_vec)
-# dev_loader = get_nli_dataloader(dev_data, word_vec)
-# test_loader = get_nli_dataloader(test_data, word_vec)
+#     s1 = torch.nn.utils.rnn.pad_sequence([s1[i] for i in s1_perm_idx], batch_first=True)
+#     s2 = torch.nn.utils.rnn.pad_sequence([s2[i] for i in s2_perm_idx], batch_first=True)
+#     labels = torch.tensor(labels, dtype=torch.long)
+
+#     return s1, s1_lengths, s2, s2_lengths, labels

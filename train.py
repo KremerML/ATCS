@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch import optim
+from tqdm import tqdm
 
 from data_preprocess import NLIDataset, get_nli, build_vocab, collate_fn
 from models import NLIClassifier
@@ -24,11 +25,11 @@ parser.add_argument("--word_emb_path", type=str, default="glove/glove.840B.300d.
 
 # training
 parser.add_argument("--n_epochs", type=int, default=20)
-parser.add_argument("--batch_size", type=int, default=8)
+parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--dpout_model", type=float, default=0., help="encoder dropout")
-parser.add_argument("--lr", type=float, default=0.1, help="learning rate")
-parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
-parser.add_argument("--minlr", type=float, default=1e-5, help="minimum lr")
+parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
+# parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
+# parser.add_argument("--minlr", type=float, default=1e-5, help="minimum lr")
 
 # model
 parser.add_argument("--encoder_type", type=str, default='BasicEncoder', help="see list of encoders")
@@ -46,7 +47,8 @@ parser.add_argument("--word_emb_dim", type=int, default=300, help="word embeddin
 params, _ = parser.parse_known_args()
 
 # set gpu device
-torch.cuda.set_device(0)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 
 # print parameters passed, and all parameters
 print('\ntogrep : {0}\n'.format(sys.argv[1:]))
@@ -68,7 +70,7 @@ word_vec = build_vocab(train['s1'] + train['s2'] +
                        test['s1'] + test['s2'], params.word_emb_path)
 
 print("Number of words in word_vec:", len(word_vec))
-print("Sample word_vec items:", list(word_vec.items())[:5])
+# print("Sample word_vec items:", list(word_vec.items())[:2])
 
 
 train_dataset = NLIDataset(train, word_vec)
@@ -109,13 +111,15 @@ loss_fn = nn.CrossEntropyLoss(weight=weight)
 loss_fn.size_average = False
 
 # optimizer
-optim_fn = optim.SGD
+optim_fn = optim.Adam
 lr = params.lr
 optimizer = optim_fn(nli_net.parameters(), lr=lr)
 
 # cuda by default
-nli_net.cuda()
-loss_fn.cuda()
+nli_net.to(device)
+loss_fn.to(device)
+# nli_net.cuda()
+# loss_fn.cuda()
 
 """
 TRAIN
@@ -135,59 +139,42 @@ def trainepoch(epoch):
     last_time = time.time()
     correct = 0.
     print('Learning rate : {0}'.format(lr))
-    s1 = train['s1']
-    s2 = train['s2']
-    target = train['label']
 
-    for stidx, (s1_batch, s1_len, s2_batch, s2_len, tgt_batch) in enumerate(train_loader):
-        s1_batch, s2_batch = s1_batch.cuda(), s2_batch.cuda()
-        tgt_batch = torch.LongTensor(tgt_batch).cuda()
-        k = s1_batch.size(1)  # actual batch size
+    for stidx, (s1_batch, s1_len, s2_batch, s2_len, tgt_batch) in tqdm(enumerate(train_loader)):
+        s1_batch, s2_batch = s1_batch.to(device), s2_batch.to(device)
+        tgt_batch = torch.LongTensor(tgt_batch).to(device)
 
         # model forward
         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
 
         pred = output.data.max(1)[1]
-        correct += pred.long().eq(tgt_batch.data.long()).cpu().sum()
-        assert len(pred) == len(s1[stidx:stidx + params.batch_size])
+        correct += pred.long().eq(tgt_batch.data.long()).cpu().sum().item()
 
         # loss
         loss = loss_fn(output, tgt_batch)
-        all_costs.append(loss.data[0])
-        words_count += (s1_batch.nelement() + s2_batch.nelement()) / params.word_emb_dim
+        all_costs.append(loss.item())
 
         # backward
         optimizer.zero_grad()
         loss.backward()
 
-        # gradient clipping (off by default)
-        shrink_factor = 1
-        total_norm = 0
-
-        for p in nli_net.parameters():
-            if p.requires_grad:
-                p.grad.data.div_(k)  # divide by the actual batch size
-                total_norm += p.grad.data.norm() ** 2
-        total_norm = np.sqrt(total_norm)
-
         # optimizer step
         optimizer.step()
 
         if len(all_costs) == 100:
-            logs.append('{0} ; loss {1} ; sentence/s {2} ; words/s {3} ; accuracy train : {4}'.format(
-                            stidx, round(np.mean(all_costs), 2),
-                            int(len(all_costs) * params.batch_size / (time.time() - last_time)),
-                            int(words_count * 1.0 / (time.time() - last_time)),
-                            round(100.*correct/(stidx+k), 2)))
+            logs.append('{0} ; loss {1} ; sentence/s {2} ; accuracy train : {3}'.format(
+                stidx, round(np.mean(all_costs), 2),
+                int(len(all_costs) * params.batch_size / (time.time() - last_time)),
+                round(100.*correct/((stidx+1)*params.batch_size), 2)))
             print(logs[-1])
             last_time = time.time()
             words_count = 0
             all_costs = []
-    train_acc = round(100 * correct/len(s1), 2)
+
+    train_acc = round(100 * correct/len(train_loader.dataset), 2)
     print('results : epoch {0} ; mean accuracy train : {1}'
           .format(epoch, train_acc))
     return train_acc
-
 
 def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
     nli_net.eval()
@@ -198,14 +185,14 @@ def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
         print('\nVALIDATION : Epoch {0}'.format(epoch))
 
     for s1_batch, s1_len, s2_batch, s2_len, tgt_batch in dataloader:
-        s1_batch, s2_batch = s1_batch.cuda(), s2_batch.cuda()
-        tgt_batch = torch.LongTensor(tgt_batch).cuda()
+        s1_batch, s2_batch = s1_batch.to(device), s2_batch.to(device)
+        tgt_batch = torch.LongTensor(tgt_batch).to(device)
 
         # model forward
         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
 
         pred = output.data.max(1)[1]
-        correct += pred.long().eq(tgt_batch.data.long()).cpu().sum()
+        correct += pred.long().eq(tgt_batch.data.long()).cpu().sum().item()
 
     accuracy = round(100 * correct / len(dataloader.dataset), 2)
     print('results : epoch {0} ; mean accuracy {1} : {2}'.format(epoch, eval_type, accuracy))
@@ -215,13 +202,89 @@ def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
             print('saving model at epoch {0}'.format(epoch))
             torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
             val_acc_best = accuracy
-        else:
-            lr = lr / params.lrshrink
-            print('Shrinking lr by : {0}. New lr = {1}'.format(params.lrshrink,
-                    lr))
-            if lr < params.minlr:
-                stop_training = True
     return accuracy
+
+# def trainepoch(epoch):
+#     print('\nTRAINING : Epoch ' + str(epoch))
+#     nli_net.train()
+#     all_costs = []
+#     logs = []
+#     words_count = 0
+
+#     last_time = time.time()
+#     correct = 0.
+#     print('Learning rate : {0}'.format(lr))
+#     s1 = train['s1']
+#     s2 = train['s2']
+#     target = train['label']
+
+#     for stidx, (s1_batch, s1_len, s2_batch, s2_len, tgt_batch) in tqdm(enumerate(train_loader)):
+#         s1_batch, s2_batch = s1_batch.to(device), s2_batch.to(device)
+#         tgt_batch = torch.LongTensor(tgt_batch).to(device)
+#         k = s1_batch.size(1)  # actual batch size
+
+#         # model forward
+#         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
+
+#         pred = output.data.max(1)[1]
+#         correct += pred.long().eq(tgt_batch.data.long()).cpu().sum()
+#         assert len(pred) == len(s1[stidx:stidx + params.batch_size])
+
+#         # loss
+#         loss = loss_fn(output, tgt_batch)
+#         all_costs.append(loss)
+
+#         # backward
+#         optimizer.zero_grad()
+#         loss.backward()
+
+#         # optimizer step
+#         optimizer.step()
+#         if len(all_costs) == 100:
+#             costs = [c.detach() for c in all_costs]
+#             logs.append('{0} ; loss {1} ; sentence/s {2} ; accuracy train : {3}'.format(
+#                 stidx, round(np.mean(torch.stack(costs).detach().cpu().numpy()), 2),
+#                 int(len(all_costs) * params.batch_size / (time.time() - last_time)),
+#                 round(100.*correct.item()/(stidx+k), 2)))
+            
+#             print(logs[-1])
+#             last_time = time.time()
+#             words_count = 0
+#             all_costs = []
+
+#     train_acc = round(100 * correct/len(s1), 2)
+#     print('results : epoch {0} ; mean accuracy train : {1}'
+#           .format(epoch, train_acc))
+#     return train_acc
+
+
+# def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
+#     nli_net.eval()
+#     correct = 0.
+#     global val_acc_best, lr, stop_training, adam_stop
+
+#     if eval_type == 'valid':
+#         print('\nVALIDATION : Epoch {0}'.format(epoch))
+
+#     for s1_batch, s1_len, s2_batch, s2_len, tgt_batch in dataloader:
+#         s1_batch, s2_batch = s1_batch.to(device), s2_batch.to(device)
+#         tgt_batch = torch.LongTensor(tgt_batch).to(device)
+
+#         # model forward
+#         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
+
+#         pred = output.data.max(1)[1]
+#         correct += pred.long().eq(tgt_batch.data.long()).cpu().sum()
+
+#     accuracy = round(100 * correct / len(dataloader.dataset), 2)
+#     print('results : epoch {0} ; mean accuracy {1} : {2}'.format(epoch, eval_type, accuracy))
+
+#     if eval_type == 'valid' and epoch <= params.n_epochs:
+#         if accuracy > val_acc_best:
+#             print('saving model at epoch {0}'.format(epoch))
+#             torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
+#             val_acc_best = accuracy
+#     return accuracy
 
 # Train the model
 epoch = 1

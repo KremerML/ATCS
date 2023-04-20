@@ -17,4 +17,4 @@ cd $HOME/ATCS-practical-1/
 
 source activate atcs_gpu
 
-srun python -u train.py --encoder_choice average --experiment_name average_1 --num_epochs 5
+srun python -u train.py --encoder_type biLSTMEncoder
