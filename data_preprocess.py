@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import torch
+import json
 from torch.utils.data import Dataset, DataLoader
 
 class NLIDataset(Dataset):
@@ -8,6 +9,9 @@ class NLIDataset(Dataset):
         self.data = data
         self.word_vec = word_vec
         self.emb_dim = emb_dim
+        label_to_idx = {'entailment': 0, 'neutral': 1, 'contradiction': 2}
+        
+        self.data['label'] = [label_to_idx[label] for label in self.data['label']]
 
     def __len__(self):
         return len(self.data['s1'])
@@ -48,7 +52,7 @@ def get_word_dict(sentences):
 def get_glove(word_dict, glove_path):
     # create word_vec with glove vectors
     word_vec = {}
-    with open(glove_path) as f:
+    with open(glove_path, encoding='utf-8') as f:
         for line in f:
             word, vec = line.split(' ', 1)
             if word in word_dict:
@@ -56,6 +60,7 @@ def get_glove(word_dict, glove_path):
     print('Found {0}(/{1}) words with glove vectors'.format(
                 len(word_vec), len(word_dict)))
     return word_vec
+
 
 
 def build_vocab(sentences, glove_path):
@@ -66,45 +71,66 @@ def build_vocab(sentences, glove_path):
 
 
 def get_nli(data_path):
-    s1 = {}
-    s2 = {}
-    target = {}
+    snli_train_path = os.path.join(data_path, 'snli_1.0_train.jsonl')
+    snli_valid_path = os.path.join(data_path, 'snli_1.0_dev.jsonl')
+    snli_test_path = os.path.join(data_path, 'snli_1.0_test.jsonl')
 
-    dico_label = {'entailment': 0,  'neutral': 1, 'contradiction': 2}
+    train_data = {'s1': [], 's2': [], 'label': []}
+    valid_data = {'s1': [], 's2': [], 'label': []}
+    test_data = {'s1': [], 's2': [], 'label': []}
 
-    for data_type in ['train', 'dev', 'test']:
-        s1[data_type], s2[data_type], target[data_type] = {}, {}, {}
-        s1[data_type]['path'] = os.path.join(data_path, 's1.' + data_type)
-        s2[data_type]['path'] = os.path.join(data_path, 's2.' + data_type)
-        target[data_type]['path'] = os.path.join(data_path,
-                                                 'labels.' + data_type)
+    for file_path, data in zip([snli_train_path, snli_valid_path, snli_test_path], [train_data, valid_data, test_data]):
+        with open(file_path, 'r') as f:
+            for line in f:
+                instance = json.loads(line)
+                if instance['gold_label'] != '-':
+                    data['s1'].append(instance['sentence1'])
+                    data['s2'].append(instance['sentence2'])
+                    data['label'].append(instance['gold_label'])
 
-        s1[data_type]['sent'] = [line.rstrip() for line in
-                                 open(s1[data_type]['path'], 'r')]
-        s2[data_type]['sent'] = [line.rstrip() for line in
-                                 open(s2[data_type]['path'], 'r')]
-        target[data_type]['data'] = np.array([dico_label[line.rstrip('\n')]
-                for line in open(target[data_type]['path'], 'r')])
+    return train_data, valid_data, test_data
 
-        assert len(s1[data_type]['sent']) == len(s2[data_type]['sent']) == \
-            len(target[data_type]['data'])
 
-        print('** {0} DATA : Found {1} pairs of {2} sentences.'.format(
-                data_type.upper(), len(s1[data_type]['sent']), data_type))
+# def get_nli(data_path):
+#     s1 = {}
+#     s2 = {}
+#     target = {}
 
-    train = {'s1': s1['train']['sent'], 's2': s2['train']['sent'],
-             'label': target['train']['data']}
-    dev = {'s1': s1['dev']['sent'], 's2': s2['dev']['sent'],
-           'label': target['dev']['data']}
-    test = {'s1': s1['test']['sent'], 's2': s2['test']['sent'],
-            'label': target['test']['data']}
-    return train, dev, test
+#     dico_label = {'entailment': 0,  'neutral': 1, 'contradiction': 2}
 
-def get_nli_dataloader(data, word_vec, batch_size=32, shuffle=True, num_workers=0):
-    dataset = NLIDataset(data, word_vec)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
-                            collate_fn=collate_fn)
-    return dataloader
+#     for data_type in ['train', 'dev', 'test']:
+#         s1[data_type], s2[data_type], target[data_type] = {}, {}, {}
+#         s1[data_type]['path'] = os.path.join(data_path, 'snli_1.0_' + data_type + '.txt')
+#         s2[data_type]['path'] = os.path.join(data_path, 'snli_1.0_' + data_type + '.txt')
+#         target[data_type]['path'] = os.path.join(data_path,
+#                                                  'labels.' + data_type)
+
+#         s1[data_type]['sent'] = [line.rstrip() for line in
+#                                  open(s1[data_type]['path'], 'r')]
+#         s2[data_type]['sent'] = [line.rstrip() for line in
+#                                  open(s2[data_type]['path'], 'r')]
+#         target[data_type]['data'] = np.array([dico_label[line.rstrip('\n')]
+#                 for line in open(target[data_type]['path'], 'r')])
+
+#         assert len(s1[data_type]['sent']) == len(s2[data_type]['sent']) == \
+#             len(target[data_type]['data'])
+
+#         print('** {0} DATA : Found {1} pairs of {2} sentences.'.format(
+#                 data_type.upper(), len(s1[data_type]['sent']), data_type))
+
+#     train = {'s1': s1['train']['sent'], 's2': s2['train']['sent'],
+#              'label': target['train']['data']}
+#     dev = {'s1': s1['dev']['sent'], 's2': s2['dev']['sent'],
+#            'label': target['dev']['data']}
+#     test = {'s1': s1['test']['sent'], 's2': s2['test']['sent'],
+#             'label': target['test']['data']}
+#     return train, dev, test
+
+# def get_nli_dataloader(data, word_vec, batch_size=32, shuffle=True, num_workers=0):
+#     dataset = NLIDataset(data, word_vec)
+#     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers,
+#                             collate_fn=collate_fn)
+#     return dataloader
 
 def collate_fn(batch):
     s1, s1_lengths, s2, s2_lengths, labels = zip(*batch)

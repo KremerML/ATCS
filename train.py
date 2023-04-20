@@ -8,10 +8,10 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader
+from torch import optim
 
 from data_preprocess import NLIDataset, get_nli, build_vocab, collate_fn
-from utils.training_utils import get_optimizer
 from models import NLIClassifier
 
 
@@ -24,13 +24,11 @@ parser.add_argument("--word_emb_path", type=str, default="glove/glove.840B.300d.
 
 # training
 parser.add_argument("--n_epochs", type=int, default=20)
-parser.add_argument("--batch_size", type=int, default=32)
+parser.add_argument("--batch_size", type=int, default=8)
 parser.add_argument("--dpout_model", type=float, default=0., help="encoder dropout")
-parser.add_argument("--optimizer", type=str, default="sgd,lr=0.1", help="Optimizer SGD with learning rate=0.1")
+parser.add_argument("--lr", type=float, default=0.1, help="learning rate")
 parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
-parser.add_argument("--decay", type=float, default=0.99, help="lr decay")
 parser.add_argument("--minlr", type=float, default=1e-5, help="minimum lr")
-# parser.add_argument("--max_norm", type=float, default=5., help="max norm (grad clipping)")
 
 # model
 parser.add_argument("--encoder_type", type=str, default='BasicEncoder', help="see list of encoders")
@@ -39,7 +37,7 @@ parser.add_argument("--fc_dim", type=int, default=512, help="nhid of fc layers")
 parser.add_argument("--n_classes", type=int, default=3, help="entailment/neutral/contradiction")
 
 # gpu
-parser.add_argument("--gpu_id", type=int, default=1, help="GPU ID")
+# parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID")
 parser.add_argument("--seed", type=int, default=42, help="seed")
 
 # data
@@ -48,7 +46,7 @@ parser.add_argument("--word_emb_dim", type=int, default=300, help="word embeddin
 params, _ = parser.parse_known_args()
 
 # set gpu device
-torch.cuda.set_device(params.gpu_id)
+torch.cuda.set_device(0)
 
 # print parameters passed, and all parameters
 print('\ntogrep : {0}\n'.format(sys.argv[1:]))
@@ -69,13 +67,17 @@ word_vec = build_vocab(train['s1'] + train['s2'] +
                        valid['s1'] + valid['s2'] +
                        test['s1'] + test['s2'], params.word_emb_path)
 
+print("Number of words in word_vec:", len(word_vec))
+print("Sample word_vec items:", list(word_vec.items())[:5])
+
+
 train_dataset = NLIDataset(train, word_vec)
 valid_dataset = NLIDataset(valid, word_vec)
 test_dataset = NLIDataset(test, word_vec)
 
-train_loader = DataLoader(train_dataset, batch_size=params.batch_size, shuffle=True, collate_fn=collate_fn())
-valid_loader = DataLoader(valid_dataset, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn())
-test_loader = DataLoader(test_dataset, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn())
+train_loader = DataLoader(train_dataset, batch_size=params.batch_size, shuffle=True, collate_fn=collate_fn)
+valid_loader = DataLoader(valid_dataset, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn)
+test_loader = DataLoader(test_dataset, batch_size=params.batch_size, shuffle=False, collate_fn=collate_fn)
 """
 MODEL
 """
@@ -84,7 +86,6 @@ config_nli_model = {
     'n_words'        :  len(word_vec)         ,
     'word_emb_dim'   :  params.word_emb_dim   ,
     'enc_lstm_dim'   :  params.enc_lstm_dim   ,
-    'n_enc_layers'   :  params.n_enc_layers   ,
     'dpout_model'    :  params.dpout_model    ,
     'fc_dim'         :  params.fc_dim         ,
     'bsize'          :  params.batch_size     ,
@@ -108,8 +109,9 @@ loss_fn = nn.CrossEntropyLoss(weight=weight)
 loss_fn.size_average = False
 
 # optimizer
-optim_fn, optim_params = get_optimizer(params.optimizer)
-optimizer = optim_fn(nli_net.parameters(), **optim_params)
+optim_fn = optim.SGD
+lr = params.lr
+optimizer = optim_fn(nli_net.parameters(), lr=lr)
 
 # cuda by default
 nli_net.cuda()
@@ -121,7 +123,6 @@ TRAIN
 val_acc_best = -1e10
 adam_stop = False
 stop_training = False
-lr = optim_params['lr'] if 'sgd' in params.optimizer else None
 
 
 def trainepoch(epoch):
@@ -133,17 +134,10 @@ def trainepoch(epoch):
 
     last_time = time.time()
     correct = 0.
-    # shuffle the data
-    permutation = np.random.permutation(len(train['s1']))
-
-    s1 = train['s1'][permutation]
-    s2 = train['s2'][permutation]
-    target = train['label'][permutation]
-
-
-    optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] * params.decay if epoch>1\
-        and 'sgd' in params.optimizer else optimizer.param_groups[0]['lr']
-    print('Learning rate : {0}'.format(optimizer.param_groups[0]['lr']))
+    print('Learning rate : {0}'.format(lr))
+    s1 = train['s1']
+    s2 = train['s2']
+    target = train['label']
 
     for stidx, (s1_batch, s1_len, s2_batch, s2_len, tgt_batch) in enumerate(train_loader):
         s1_batch, s2_batch = s1_batch.cuda(), s2_batch.cuda()
@@ -176,14 +170,8 @@ def trainepoch(epoch):
                 total_norm += p.grad.data.norm() ** 2
         total_norm = np.sqrt(total_norm)
 
-        if total_norm > params.max_norm:
-            shrink_factor = params.max_norm / total_norm
-        current_lr = optimizer.param_groups[0]['lr'] # current lr (no external "lr", for adam)
-        optimizer.param_groups[0]['lr'] = current_lr * shrink_factor # just for update
-
         # optimizer step
         optimizer.step()
-        optimizer.param_groups[0]['lr'] = current_lr
 
         if len(all_costs) == 100:
             logs.append('{0} ; loss {1} ; sentence/s {2} ; words/s {3} ; accuracy train : {4}'.format(
@@ -228,16 +216,11 @@ def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
             torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
             val_acc_best = accuracy
         else:
-            if 'sgd' in params.optimizer:
-                optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / params.lrshrink
-                print('Shrinking lr by : {0}. New lr = {1}'.format(params.lrshrink,
-                     optimizer.param_groups[0]['lr']))
-                if optimizer.param_groups[0]['lr'] < params.minlr:
-                    stop_training = True
-            if 'adam' in params.optimizer:
-                # early stopping (at 2nd decrease in accuracy)
-                stop_training = adam_stop
-                adam_stop = True
+            lr = lr / params.lrshrink
+            print('Shrinking lr by : {0}. New lr = {1}'.format(params.lrshrink,
+                    lr))
+            if lr < params.minlr:
+                stop_training = True
     return accuracy
 
 # Train the model

@@ -14,9 +14,12 @@ class NLIClassifier(nn.Module):
         self.encoder_type = config['encoder_type']
 
         self.encoder = eval(self.encoder_type)(config)
+        
         self.inputdim = 4*2*self.enc_lstm_dim
         self.inputdim = self.inputdim/2 if self.encoder_type == "LSTMEncoder" \
                                         else self.inputdim
+        self.inputdim = 300 if self.encoder_type == "BasicEncoder" else self.inputdim
+        
         self.classifier = nn.Sequential(
             nn.Linear(self.inputdim, self.fc_dim),
             nn.Linear(self.fc_dim, self.fc_dim),
@@ -39,19 +42,27 @@ class NLIClassifier(nn.Module):
 # averaging GLoVe word embeddings to obtain sentence representations
 class BasicEncoder(nn.Module):
     def __init__(self, config):
-
-        self.vocab_size = config['n_words']
-        self.embedding_dim = config['word_emb_dim']
-        self.vector_embeddings = config['vector_embeddings']
-
         super(BasicEncoder, self).__init__()
+        self.vector_embeddings = config['vector_embeddings']
+        self.vocab_size = len(self.vector_embeddings)
+        self.word_emb_dim = config['word_emb_dim']
 
-        self.embedding = nn.Embedding(self.vocab_size, self.embedding_dim)
-        self.embedding.weight.data.copy_(self.vector_embeddings)
+        self.embedding = nn.Embedding(self.vocab_size, self.word_emb_dim)
+        
+        # Convert the dictionary to a tensor before copying
+        vector_embeddings_tensor = torch.FloatTensor(np.array(list(self.vector_embeddings.values())))
+        print("Shape of vector_embeddings_tensor:", vector_embeddings_tensor.shape)
+        self.embedding.weight.data.copy_(vector_embeddings_tensor)
+
 
     def forward(self, emb):
-        
-        emb = self.embedding(emb)
+        input_batch, _ = emb  # Unpack the input_batch and ignore the lengths tensor
+        input_batch = input_batch.long()
+        print("Max index in input_batch:", input_batch.max())
+        print("Min index in input_batch:", input_batch.min())
+        print("Vocab size:", self.vocab_size)
+
+        emb = self.embedding(input_batch)
         emb = torch.mean(emb, dim=1)
 
         return emb
