@@ -40,11 +40,19 @@ The model will be automatically evaluated on the validation dataset after each e
 ## Project Structure
 ATCS
 ├─ .gitignore
+
 ├─ .vscode
+
 │  └─ launch.json
+
 ├─ data_preprocess.py
+
 ├─ models.py
+
 ├─ README.md
+
 ├─ results_analysis.ipynb
+
 ├─ senteval.py
+
 └─ train.py
