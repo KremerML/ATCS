@@ -3,10 +3,10 @@ Advanced Topics in Computational Semantics
 Natural Language Inference (NLI) with PyTorch. This repository contains an implementation of Natural Language Inference (NLI) models using PyTorch. The models are trained and evaluated on the SNLI dataset.
 
 ## Package/Installation Requirements
-Python 3.6 or higher
-[PyTorch](https://pytorch.org/) (latest version)
-NumPy
-SciPy
+- Python 3.6 or higher
+- [PyTorch](https://pytorch.org/) (latest version)
+- NumPy
+- SciPy
 
 ## Training and Evaluating a Model
 Clone the repository to your local machine:
