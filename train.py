@@ -99,7 +99,7 @@ config_nli_model = {
 
 # model
 encoder_types = ['BasicEncoder', 'LSTMEncoder', 'biLSTMEncoder',
-                 'BiLSTMMaxPoolEncoder']
+                 'biLSTMMaxPoolEncoder']
 assert params.encoder_type in encoder_types, "encoder_type must be in " + \
                                              str(encoder_types)
 nli_net = NLIClassifier(config_nli_model)

@@ -16,12 +16,12 @@ class NLIClassifier(nn.Module):
 
         self.encoder = eval(self.encoder_type)(config)
         
-        self.input_dim = 0
+        self.inputdim = 0
         if self.encoder_type == "BasicEncoder":
             self.inputdim = self.word_emb_dim * 4
         elif self.encoder_type == "LSTMEncoder":
             self.inputdim = 4*self.enc_lstm_dim
-        elif self.encoder_type == "biLSTMEncoder" or self.encoder_type == "BiLSTMMaxPoolEncoder":
+        elif self.encoder_type == "biLSTMEncoder" or self.encoder_type == "biLSTMMaxPoolEncoder":
             self.inputdim = 4*2*self.enc_lstm_dim
  
         self.classifier = nn.Sequential(
@@ -47,24 +47,12 @@ class NLIClassifier(nn.Module):
 class BasicEncoder(nn.Module):
     def __init__(self, config):
         super(BasicEncoder, self).__init__()
-        self.vector_embeddings = config['vector_embeddings']
-        self.vocab_size = len(self.vector_embeddings)
         self.word_emb_dim = config['word_emb_dim']
-
-        self.embedding = nn.Embedding(self.vocab_size, self.word_emb_dim)
-        
-        # Convert the dictionary to a tensor before copying
-        vector_embeddings_tensor = torch.FloatTensor(np.array(list(self.vector_embeddings.values())))
-        
-        print("Shape of vector_embeddings_tensor:", vector_embeddings_tensor.shape)
-        self.embedding.weight.data.copy_(vector_embeddings_tensor)
-
 
     def forward(self, emb):
         input_batch, _ = emb  # Unpack the input_batch and ignore the lengths tensor
-        
-        emb = self.embedding(input_batch)
-        emb = torch.mean(emb, dim=1)
+
+        emb = torch.mean(input_batch, dim=1)
 
         return emb
         
@@ -120,9 +108,9 @@ class biLSTMEncoder(nn.Module):
 
 # BiLSTM with max pooling applied to the concatenation of word-level hidden states from
 # both directions to retrieve sentence representations
-class BiLSTMMaxPoolEncoder(nn.Module):
+class biLSTMMaxPoolEncoder(nn.Module):
     def __init__(self, config):
-        super(BiLSTMMaxPoolEncoder, self).__init__()
+        super(biLSTMMaxPoolEncoder, self).__init__()
         self.word_emb_dim = config['word_emb_dim']
         self.enc_lstm_dim = config['enc_lstm_dim']
         self.dpout_model = config['dpout_model']
@@ -142,35 +130,4 @@ class BiLSTMMaxPoolEncoder(nn.Module):
         emb, _ = torch.max(sent_output, dim=1)
 
         return emb
-
-
-# class BiLSTMMaxPoolEncoder(nn.Module):
-#     def __init__(self, config):
-#         super(BiLSTMMaxPoolEncoder, self).__init__()
-#         self.word_emb_dim = config['word_emb_dim']
-#         self.enc_lstm_dim = config['enc_lstm_dim']
-#         self.dpout_model = config['dpout_model']
-
-#         self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, 
-#                                 num_layers=1, bidirectional=True, dropout=self.dpout_model)
-#         self.proj_enc = nn.Linear(2 * self.enc_lstm_dim, 
-#                                   2 * self.enc_lstm_dim, bias=False)
-
-#     def forward(self, sent_tuple):
-#         sent, sent_len = sent_tuple
-#         bsize = sent.size(1)
-
-#         # Handling padding in Recurrent Networks
-#         sent_packed = nn.utils.rnn.pack_padded_sequence(sent, sent_len)
-#         sent_output, _ = self.enc_lstm(sent_packed)
-#         sent_output = nn.utils.rnn.pad_packed_sequence(sent_output)[0]
-
-#         # Project the output of the LSTM
-#         sent_output = self.proj_enc(sent_output.view(-1, 2 * self.enc_lstm_dim)).view(-1, bsize, 2 * self.enc_lstm_dim)
-
-#         # Max Pooling
-#         emb = torch.max(sent_output, 0)[0].squeeze(0)
-
-#         return emb
-
 
