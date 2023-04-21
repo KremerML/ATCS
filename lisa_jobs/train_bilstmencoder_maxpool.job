@@ -5,9 +5,9 @@
 #SBATCH --job-name=maxpool
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=3
-#SBATCH --time=01:00:00
+#SBATCH --time=10:00:00
 #SBATCH --mem=32000M
-#SBATCH --output=average_%A.out
+#SBATCH --output=maxpool_%A.out
 
 module purge
 module load 2021
@@ -17,4 +17,4 @@ cd $HOME/ATCS/
 
 source activate atcs_gpu
 
-srun python -u train.py --encoder_type biLSTMMaxPoolEncoder
+srun python -u train.py --encoder_type biLSTMMaxPoolEncoder --outputmodelname maxpool_bilstm_model.pickle --n_epochs 10

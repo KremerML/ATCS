@@ -3,7 +3,6 @@ import os
 import sys
 import time
 import argparse
-
 import numpy as np
 
 import torch
@@ -28,8 +27,6 @@ parser.add_argument("--n_epochs", type=int, default=20)
 parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--dpout_model", type=float, default=0., help="encoder dropout")
 parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
-# parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
-# parser.add_argument("--minlr", type=float, default=1e-5, help="minimum lr")
 
 # model
 parser.add_argument("--encoder_type", type=str, default='BasicEncoder', help="see list of encoders")
@@ -38,7 +35,6 @@ parser.add_argument("--fc_dim", type=int, default=512, help="nhid of fc layers")
 parser.add_argument("--n_classes", type=int, default=3, help="entailment/neutral/contradiction")
 
 # gpu
-# parser.add_argument("--gpu_id", type=int, default=0, help="GPU ID")
 parser.add_argument("--seed", type=int, default=42, help="seed")
 
 # data
@@ -203,88 +199,6 @@ def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
             torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
             val_acc_best = accuracy
     return accuracy
-
-# def trainepoch(epoch):
-#     print('\nTRAINING : Epoch ' + str(epoch))
-#     nli_net.train()
-#     all_costs = []
-#     logs = []
-#     words_count = 0
-
-#     last_time = time.time()
-#     correct = 0.
-#     print('Learning rate : {0}'.format(lr))
-#     s1 = train['s1']
-#     s2 = train['s2']
-#     target = train['label']
-
-#     for stidx, (s1_batch, s1_len, s2_batch, s2_len, tgt_batch) in tqdm(enumerate(train_loader)):
-#         s1_batch, s2_batch = s1_batch.to(device), s2_batch.to(device)
-#         tgt_batch = torch.LongTensor(tgt_batch).to(device)
-#         k = s1_batch.size(1)  # actual batch size
-
-#         # model forward
-#         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
-
-#         pred = output.data.max(1)[1]
-#         correct += pred.long().eq(tgt_batch.data.long()).cpu().sum()
-#         assert len(pred) == len(s1[stidx:stidx + params.batch_size])
-
-#         # loss
-#         loss = loss_fn(output, tgt_batch)
-#         all_costs.append(loss)
-
-#         # backward
-#         optimizer.zero_grad()
-#         loss.backward()
-
-#         # optimizer step
-#         optimizer.step()
-#         if len(all_costs) == 100:
-#             costs = [c.detach() for c in all_costs]
-#             logs.append('{0} ; loss {1} ; sentence/s {2} ; accuracy train : {3}'.format(
-#                 stidx, round(np.mean(torch.stack(costs).detach().cpu().numpy()), 2),
-#                 int(len(all_costs) * params.batch_size / (time.time() - last_time)),
-#                 round(100.*correct.item()/(stidx+k), 2)))
-            
-#             print(logs[-1])
-#             last_time = time.time()
-#             words_count = 0
-#             all_costs = []
-
-#     train_acc = round(100 * correct/len(s1), 2)
-#     print('results : epoch {0} ; mean accuracy train : {1}'
-#           .format(epoch, train_acc))
-#     return train_acc
-
-
-# def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
-#     nli_net.eval()
-#     correct = 0.
-#     global val_acc_best, lr, stop_training, adam_stop
-
-#     if eval_type == 'valid':
-#         print('\nVALIDATION : Epoch {0}'.format(epoch))
-
-#     for s1_batch, s1_len, s2_batch, s2_len, tgt_batch in dataloader:
-#         s1_batch, s2_batch = s1_batch.to(device), s2_batch.to(device)
-#         tgt_batch = torch.LongTensor(tgt_batch).to(device)
-
-#         # model forward
-#         output = nli_net((s1_batch, s1_len), (s2_batch, s2_len))
-
-#         pred = output.data.max(1)[1]
-#         correct += pred.long().eq(tgt_batch.data.long()).cpu().sum()
-
-#     accuracy = round(100 * correct / len(dataloader.dataset), 2)
-#     print('results : epoch {0} ; mean accuracy {1} : {2}'.format(epoch, eval_type, accuracy))
-
-#     if eval_type == 'valid' and epoch <= params.n_epochs:
-#         if accuracy > val_acc_best:
-#             print('saving model at epoch {0}'.format(epoch))
-#             torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
-#             val_acc_best = accuracy
-#     return accuracy
 
 # Train the model
 epoch = 1

@@ -34,17 +34,6 @@ class NLIDataset(Dataset):
             if word in self.word_vec:
                 indices[i] = torch.FloatTensor(self.word_vec[word])
         return indices, length
-    # def _get_sentence_indices(self, sentence):
-    #     tokens = sentence.split()
-    #     length = len(tokens)
-    #     indices = np.zeros(length, dtype=np.int64)
-
-    #     for i, word in enumerate(tokens):
-    #         if word in self.word_vec:
-    #             indices[i] = list(self.word_vec.keys()).index(word)
-    #     indices = torch.from_numpy(indices).unsqueeze(1)
-    #     return indices, length
-
 
 
 def get_word_dict(sentences):
@@ -112,14 +101,3 @@ def collate_fn(batch):
     labels = torch.tensor(labels, dtype=torch.long)
 
     return s1, s1_lengths, s2, s2_lengths, labels
-
-# def collate_fn(batch):
-#     s1, s1_lengths, s2, s2_lengths, labels = zip(*batch)
-#     s1_lengths, s1_perm_idx = torch.tensor(s1_lengths).sort(descending=True)
-#     s2_lengths, s2_perm_idx = torch.tensor(s2_lengths).sort(descending=True)
-
-#     s1 = torch.nn.utils.rnn.pad_sequence([s1[i] for i in s1_perm_idx], batch_first=True)
-#     s2 = torch.nn.utils.rnn.pad_sequence([s2[i] for i in s2_perm_idx], batch_first=True)
-#     labels = torch.tensor(labels, dtype=torch.long)
-
-#     return s1, s1_lengths, s2, s2_lengths, labels
