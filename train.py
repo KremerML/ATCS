@@ -44,7 +44,6 @@ params, _ = parser.parse_known_args()
 
 # set gpu device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
 
 # print parameters passed, and all parameters
 print('\ntogrep : {0}\n'.format(sys.argv[1:]))
@@ -114,8 +113,6 @@ optimizer = optim_fn(nli_net.parameters(), lr=lr)
 # cuda by default
 nli_net.to(device)
 loss_fn.to(device)
-# nli_net.cuda()
-# loss_fn.cuda()
 
 """
 TRAIN
