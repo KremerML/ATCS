@@ -56,3 +56,6 @@ ATCS
 ├─ senteval.py
 
 └─ train.py
+
+## Link to pretrained models
+[Google Drive](https://drive.google.com/drive/folders/18nwxQ5PayzI1tKIlDsO3tIP0YXSh3B6V?usp=sharing)
