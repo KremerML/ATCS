@@ -116,9 +116,10 @@ class biLSTMMaxPoolEncoder(nn.Module):
         self.dpout_model = config['dpout_model']
 
         self.enc_lstm = nn.LSTM(self.word_emb_dim, self.enc_lstm_dim, 
-                                num_layers=1, bidirectional=True, dropout=self.dpout_model)
+                                num_layers=1, bidirectional=True, dropout=self.dpout_model, batch_first=True)
 
     def forward(self, sent_tuple):
+
         sent, sent_len = sent_tuple
 
         # Handling padding in Recurrent Networks
@@ -130,4 +131,3 @@ class biLSTMMaxPoolEncoder(nn.Module):
         emb, _ = torch.max(sent_output, dim=1)
 
         return emb
-

@@ -352,3 +352,7 @@ MigrationBackup/
 data/
 glove/
 examples/
+ATCS-Practical1-RonKremer/
+lisa_out/
+savedir/
+SentEval

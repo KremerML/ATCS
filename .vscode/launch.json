@@ -12,7 +12,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--encoder_type=LSTMEncoder"]
+            "args": ["--encoder_type=BasicEncoder"]
         }
     ]
 }

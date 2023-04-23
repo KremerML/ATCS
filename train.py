@@ -26,7 +26,9 @@ parser.add_argument("--word_emb_path", type=str, default="glove/glove.840B.300d.
 parser.add_argument("--n_epochs", type=int, default=20)
 parser.add_argument("--batch_size", type=int, default=16)
 parser.add_argument("--dpout_model", type=float, default=0., help="encoder dropout")
-parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
+parser.add_argument("--lr", type=float, default=0.1, help="learning rate")
+parser.add_argument("--lrshrink", type=float, default=5, help="shrink factor for sgd")
+parser.add_argument("--minlr", type=float, default=1e-5, help="minimum lr")
 
 # model
 parser.add_argument("--encoder_type", type=str, default='BasicEncoder', help="see list of encoders")
@@ -106,8 +108,10 @@ loss_fn = nn.CrossEntropyLoss(weight=weight)
 loss_fn.size_average = False
 
 # optimizer
-optim_fn = optim.Adam
+optim_fn = optim.SGD
 lr = params.lr
+lrshrink = params.lrshrink
+minlr = params.minlr
 optimizer = optim_fn(nli_net.parameters(), lr=lr)
 
 # cuda by default
@@ -118,7 +122,6 @@ loss_fn.to(device)
 TRAIN
 """
 val_acc_best = -1e10
-adam_stop = False
 stop_training = False
 
 
@@ -172,7 +175,7 @@ def trainepoch(epoch):
 def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
     nli_net.eval()
     correct = 0.
-    global val_acc_best, lr, stop_training, adam_stop
+    global val_acc_best, lr, stop_training
 
     if eval_type == 'valid':
         print('\nVALIDATION : Epoch {0}'.format(epoch))
@@ -195,6 +198,20 @@ def evaluate(epoch, dataloader, eval_type='valid', final_eval=False):
             print('saving model at epoch {0}'.format(epoch))
             torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
             val_acc_best = accuracy
+        else:
+            optimizer.param_groups[0]['lr'] = optimizer.param_groups[0]['lr'] / lrshrink
+            print('Shrinking lr by : {0}. New lr = {1}'
+                .format(lrshrink,
+                        optimizer.param_groups[0]['lr']))
+            if optimizer.param_groups[0]['lr'] < minlr:
+                stop_training = True
+
+
+    # if eval_type == 'valid' and epoch <= params.n_epochs:
+    #     if accuracy > val_acc_best:
+    #         print('saving model at epoch {0}'.format(epoch))
+    #         torch.save(nli_net.state_dict(), os.path.join(params.outputdir, params.outputmodelname))
+    #         val_acc_best = accuracy
     return accuracy
 
 # Train the model
